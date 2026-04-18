@@ -91,6 +91,12 @@ Chay lien tuc:
 npm start
 ```
 
+Chay bang PM2:
+
+```bash
+npm run start:pm2
+```
+
 Chay 1 lan:
 
 ```bash
@@ -104,6 +110,55 @@ DRY_RUN=true POST_BATCH_SIZE=1 npm run start:once
 ```
 
 `npm run start:once` duoc giu che do `force` de test thu cong bat ky luc nao, khong bi chan boi lich dang.
+
+## Chay 24/24 voi PM2
+
+Cai PM2 tren may chay:
+
+```bash
+npm install -g pm2
+mkdir -p logs
+```
+
+Chay worker bang PM2:
+
+```bash
+npm run start:pm2
+```
+
+Mot so lenh van hanh co ban:
+
+```bash
+pm2 status
+pm2 logs auto-post-facebook-page
+pm2 restart auto-post-facebook-page
+pm2 stop auto-post-facebook-page
+pm2 delete auto-post-facebook-page
+```
+
+Luu cau hinh de may reboot van tu chay lai:
+
+```bash
+pm2 save
+pm2 startup
+```
+
+Bat xoay log de tranh file log phinh qua lon:
+
+```bash
+pm2 install pm2-logrotate
+pm2 set pm2-logrotate:max_size 10M
+pm2 set pm2-logrotate:retain 7
+pm2 set pm2-logrotate:compress true
+```
+
+Repo da co san file `ecosystem.config.cjs` voi cac thiet lap an toan cho worker:
+
+- 1 process duy nhat
+- tu restart neu worker bi loi
+- restart neu RAM vuot `300M`
+- ghi log ra `logs/pm2-out.log` va `logs/pm2-error.log`
+- co `restart_delay` de tranh loop restart qua nhanh
 
 ## Hanh vi chon bai
 
