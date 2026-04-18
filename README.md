@@ -129,11 +129,24 @@ npm run start:pm2
 Mot so lenh van hanh co ban:
 
 ```bash
-pm2 status
-pm2 logs auto-post-facebook-page
-pm2 restart auto-post-facebook-page
-pm2 stop auto-post-facebook-page
-pm2 delete auto-post-facebook-page
+npm run pm2:status
+npm run pm2:logs
+npm run pm2:restart
+npm run pm2:stop
+npm run pm2:delete
+```
+
+Neu vua `git pull` code moi ve va process da chay truoc do, khong can start lai tu dau. Chi can:
+
+```bash
+npm install
+npm run pm2:restart
+```
+
+Neu may chua tung chay PM2 cho project nay, dung:
+
+```bash
+npm run start:pm2
 ```
 
 Luu cau hinh de may reboot van tu chay lai:
