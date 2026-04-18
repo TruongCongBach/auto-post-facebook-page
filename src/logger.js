@@ -1,5 +1,10 @@
 function timestamp() {
-  return new Date().toISOString();
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${day}/${month} ${hours}:${minutes}`;
 }
 
 function serialize(meta) {
@@ -7,17 +12,24 @@ function serialize(meta) {
     return '';
   }
 
-  return ` ${JSON.stringify(meta)}`;
+  return ` | ${JSON.stringify(meta)}`;
+}
+
+function write(method, symbol, message, meta) {
+  method(`${symbol} ${timestamp()} ${message}${serialize(meta)}`);
 }
 
 export const logger = {
   info(message, meta) {
-    console.log(`[${timestamp()}] INFO ${message}${serialize(meta)}`);
+    write(console.log, '•', message, meta);
   },
   warn(message, meta) {
-    console.warn(`[${timestamp()}] WARN ${message}${serialize(meta)}`);
+    write(console.warn, '⚠️', message, meta);
+  },
+  success(message, meta) {
+    write(console.log, '✅', message, meta);
   },
   error(message, meta) {
-    console.error(`[${timestamp()}] ERROR ${message}${serialize(meta)}`);
+    write(console.error, '❌', message, meta);
   }
 };
