@@ -1,7 +1,7 @@
 import { buildPostMessage } from './content.js';
 import { publishProduct } from './facebook.js';
 import { buildFallbackCopy, generateProductCopy } from './gemini.js';
-import { logger } from './logger.js';
+import { formatDateTime, logger } from './logger.js';
 import {
   countPostedInWindow,
   countRecentPosts,
@@ -13,24 +13,32 @@ import {
 } from './supabase.js';
 import { config } from './config.js';
 import { randomBetween, sleep } from './utils.js';
-import { getActiveScheduleSlot, getMinPostGapMs } from './schedule.js';
+import { getActiveScheduleSlot, getMinPostGapMs, getNextPostingOpportunity } from './schedule.js';
 
-function describeCycleReason(reason) {
-  const reasonMap = {
-    forced_run: 'Chạy thủ công nên bỏ qua kiểm tra lịch',
-    outside_schedule: 'Chưa đến khung giờ đăng',
-    slot_already_posted: 'Khung giờ hiện tại đã có bài đăng',
-    minimum_gap_not_reached: 'Chưa đủ khoảng cách tối thiểu giữa hai bài đăng',
-    within_schedule: 'Đang trong khung giờ hợp lệ để đăng',
-    hourly_rate_limit_reached: 'Đã chạm giới hạn số bài trong 1 giờ',
-    no_eligible_products: 'Không có sản phẩm hợp lệ để đăng',
-    ready_to_preview: 'Đã sẵn sàng tạo nội dung xem trước',
-    ready_to_post: 'Đã sẵn sàng đăng bài',
-    completed: 'Chu kỳ hoàn tất',
-    completed_with_failures: 'Chu kỳ hoàn tất nhưng có lỗi'
-  };
+function formatProductLabel(product) {
+  return product.name ? `${product.name} (#${product.id})` : `#${product.id}`;
+}
 
-  return reasonMap[reason] || reason;
+function formatSlotLabel(slot) {
+  if (!slot) {
+    return null;
+  }
+
+  return `${slot.label} (${formatDateTime(slot.scheduledAt)} - ${formatDateTime(slot.windowEnd)})`;
+}
+
+function resolveNextOpportunity(scheduleDecision) {
+  const now = new Date();
+
+  if (scheduleDecision.reason === 'minimum_gap_not_reached' && scheduleDecision.nextAllowedAt) {
+    return getNextPostingOpportunity(now, new Date(scheduleDecision.nextAllowedAt));
+  }
+
+  if (scheduleDecision.reason === 'slot_already_posted') {
+    return getNextPostingOpportunity(now, new Date(now.getTime() + 1000));
+  }
+
+  return getNextPostingOpportunity(now);
 }
 
 async function processProduct(product) {
@@ -39,28 +47,25 @@ async function processProduct(product) {
     aiCopy = await generateProductCopy(product);
   } catch (error) {
     logger.warn('Gemini lỗi, chuyển sang nội dung dự phòng', {
-      productId: product.id,
-      productName: product.name || null,
-      error: error.message
+      'Sản phẩm': formatProductLabel(product),
+      'Lý do': error.message
     });
     aiCopy = buildFallbackCopy(product);
   }
 
   const message = buildPostMessage(product, aiCopy);
   logger.info('Đang đăng bài lên Facebook', {
-    productId: product.id,
-    productName: product.name || null,
-    updatedAt: product.updated_at || null,
-    imageCount: product.images.length
+    'Sản phẩm': formatProductLabel(product),
+    'Số ảnh': product.images.length,
+    'Cập nhật lúc': product.updated_at ? formatDateTime(product.updated_at) : null
   });
 
   try {
     if (config.dryRun) {
       logger.info('Dry-run: đã tạo nội dung bài đăng', {
-        productId: product.id,
-        productName: product.name || null,
-        imageUrls: product.images,
-        preview: message
+        'Sản phẩm': formatProductLabel(product),
+        'Số ảnh': product.images.length,
+        'Nội dung xem trước': message
       });
       return {
         status: 'dry_run',
@@ -80,10 +85,9 @@ async function processProduct(product) {
       posted_at: new Date().toISOString()
     });
     logger.success('Đã đăng bài thành công', {
-      productId: product.id,
-      productName: product.name || null,
-      facebookPostId: result.facebookPostId,
-      endpoint: result.endpoint
+      'Sản phẩm': formatProductLabel(product),
+      'Facebook post ID': result.facebookPostId,
+      'API endpoint': result.endpoint
     });
     return {
       status: 'posted',
@@ -103,19 +107,17 @@ async function processProduct(product) {
         });
       } catch (historyError) {
         logger.error('Không ghi được lịch sử đăng bài', {
-          productId: product.id,
-          productName: product.name || null,
-          error: historyError.message
+          'Sản phẩm': formatProductLabel(product),
+          'Lý do': historyError.message
         });
       }
     }
 
     logger.error('Đăng bài thất bại', {
-      productId: product.id,
-      productName: product.name || null,
-      error: error.message,
-      code: error.code,
-      type: error.type
+      'Sản phẩm': formatProductLabel(product),
+      'Lý do': error.message,
+      'Mã lỗi': error.code,
+      'Loại lỗi': error.type
     });
     return {
       status: 'failed',
@@ -185,6 +187,7 @@ async function canPostNow({ force = false } = {}) {
 
 export async function runOnce(options = {}) {
   const scheduleDecision = await canPostNow(options);
+  const nextOpportunity = resolveNextOpportunity(scheduleDecision);
   const cycleSummary = {
     status: 'idle',
     reason: null,
@@ -205,16 +208,39 @@ export async function runOnce(options = {}) {
         }
       : null,
     latestPostedAt: toIsoOrNull(scheduleDecision.latestPostedAt),
-    nextAllowedAt: toIsoOrNull(scheduleDecision.nextAllowedAt)
+    nextAllowedAt: toIsoOrNull(scheduleDecision.nextAllowedAt),
+    nextOpportunityAt: nextOpportunity?.availableAt?.toISOString() || null,
+    nextOpportunitySlot: nextOpportunity
+      ? {
+          label: nextOpportunity.label,
+          scheduledAt: nextOpportunity.scheduledAt.toISOString(),
+          windowEnd: nextOpportunity.windowEnd.toISOString()
+        }
+      : null
   };
 
   if (!scheduleDecision.allowed) {
     cycleSummary.reason = scheduleDecision.reason;
-    logger.info(`Chưa đăng bài trong chu kỳ này: ${describeCycleReason(scheduleDecision.reason)}`, {
-      reason: scheduleDecision.reason,
-      slot: cycleSummary.slot,
-      latestPostedAt: cycleSummary.latestPostedAt,
-      nextAllowedAt: cycleSummary.nextAllowedAt
+    logger.info('Chưa đăng bài trong chu kỳ này', {
+      'Lý do':
+        {
+          outside_schedule: 'Chưa đến khung giờ đăng',
+          slot_already_posted: 'Khung giờ hiện tại đã có bài đăng',
+          minimum_gap_not_reached: 'Chưa đủ khoảng cách tối thiểu giữa hai bài đăng'
+        }[scheduleDecision.reason] || scheduleDecision.reason,
+      'Khung hiện tại': formatSlotLabel(scheduleDecision.slot),
+      'Bài gần nhất': cycleSummary.latestPostedAt ? formatDateTime(cycleSummary.latestPostedAt) : null,
+      'Được đăng sớm nhất từ': cycleSummary.nextAllowedAt
+        ? formatDateTime(cycleSummary.nextAllowedAt)
+        : null,
+      'Có thể đăng tiếp theo vào': cycleSummary.nextOpportunityAt
+        ? formatDateTime(cycleSummary.nextOpportunityAt)
+        : null,
+      'Khung đăng tiếp theo': cycleSummary.nextOpportunitySlot
+        ? `${cycleSummary.nextOpportunitySlot.label} (${formatDateTime(
+            cycleSummary.nextOpportunitySlot.scheduledAt
+          )})`
+        : null
     });
     return cycleSummary;
   }
@@ -223,8 +249,8 @@ export async function runOnce(options = {}) {
   if (!config.dryRun && recentPostCount >= config.maxPostsPerHour) {
     cycleSummary.reason = 'hourly_rate_limit_reached';
     logger.warn('Bỏ qua chu kỳ vì đã chạm giới hạn bài đăng trong 1 giờ', {
-      recentPostCount,
-      maxPostsPerHour: config.maxPostsPerHour
+      'Số bài trong 1 giờ gần nhất': recentPostCount,
+      'Giới hạn cấu hình': config.maxPostsPerHour
     });
     return cycleSummary;
   }
@@ -234,29 +260,25 @@ export async function runOnce(options = {}) {
 
   if (products.length === 0) {
     cycleSummary.reason = 'no_eligible_products';
-    logger.info('Không có sản phẩm hợp lệ để đăng');
+    logger.info('Không có sản phẩm hợp lệ để đăng', {
+      'Khung hiện tại': formatSlotLabel(scheduleDecision.slot)
+    });
     return cycleSummary;
   }
 
   cycleSummary.reason = config.dryRun ? 'ready_to_preview' : 'ready_to_post';
   logger.info(`Đã chọn ${products.length} sản phẩm để xử lý`, {
-    count: products.length,
-    slot: scheduleDecision.slot
-      ? {
-          key: scheduleDecision.slot.key,
-          label: scheduleDecision.slot.label,
-          scheduledAt: scheduleDecision.slot.scheduledAt.toISOString()
-        }
-      : null,
-    force: Boolean(options.force)
+    'Khung đăng': formatSlotLabel(scheduleDecision.slot),
+    'Chế độ': config.dryRun ? 'Dry-run' : 'Đăng thật',
+    'Chạy cưỡng bức': Boolean(options.force) ? 'Có' : null
   });
 
   for (const [index, product] of products.entries()) {
     if (index > 0) {
       const delay = randomBetween(config.minPostDelayMs, config.maxPostDelayMs);
       logger.info('Đang chờ trước khi đăng bài tiếp theo', {
-        delayMs: delay,
-        productId: product.id
+        'Thời gian chờ': `${Math.round(delay / 1000)} giây`,
+        'Sản phẩm kế tiếp': formatProductLabel(product)
       });
       await sleep(delay);
     }
@@ -280,8 +302,8 @@ export async function runOnce(options = {}) {
 export async function checkSupabaseConnection() {
   const count = await testProductsConnection();
   logger.success('Kết nối Supabase sẵn sàng', {
-    table: 'products',
-    totalProducts: count,
-    dryRun: config.dryRun
+    'Bảng dữ liệu': 'products',
+    'Tổng sản phẩm': count,
+    'Chế độ': config.dryRun ? 'Dry-run' : 'Đăng thật'
   });
 }

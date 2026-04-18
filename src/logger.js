@@ -1,22 +1,71 @@
-function timestamp() {
-  const now = new Date();
-  const day = String(now.getDate()).padStart(2, '0');
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
+export function formatDateTime(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
   return `${day}/${month} ${hours}:${minutes}`;
 }
 
-function serialize(meta) {
-  if (!meta) {
+function timestamp() {
+  return formatDateTime();
+}
+
+function formatDetailValue(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length ? value.join(', ') : null;
+  }
+
+  if (value instanceof Date) {
+    return formatDateTime(value);
+  }
+
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
+function serialize(details) {
+  if (!details) {
     return '';
   }
 
-  return ` | ${JSON.stringify(meta)}`;
+  if (typeof details === 'string') {
+    return `\n   - ${details}`;
+  }
+
+  if (Array.isArray(details)) {
+    const lines = details
+      .map((item) => formatDetailValue(item))
+      .filter(Boolean)
+      .map((item) => `   - ${item}`);
+
+    return lines.length ? `\n${lines.join('\n')}` : '';
+  }
+
+  const lines = Object.entries(details)
+    .map(([label, value]) => {
+      const formattedValue = formatDetailValue(value);
+      return formattedValue ? `   - ${label}: ${formattedValue}` : null;
+    })
+    .filter(Boolean);
+
+  return lines.length ? `\n${lines.join('\n')}` : '';
 }
 
-function write(method, symbol, message, meta) {
-  method(`${symbol} ${timestamp()} ${message}${serialize(meta)}`);
+function write(method, symbol, message, details) {
+  method(`${symbol} ${timestamp()} ${message}${serialize(details)}`);
 }
 
 export const logger = {

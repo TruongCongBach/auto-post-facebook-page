@@ -143,6 +143,37 @@ export function getActiveScheduleSlot(now = new Date()) {
   );
 }
 
+export function getNextPostingOpportunity(now = new Date(), notBefore = now) {
+  const baseline = new Date(Math.max(now.getTime(), new Date(notBefore).getTime()));
+
+  for (let offset = 0; offset < 8; offset += 1) {
+    const candidateDate = new Date(baseline);
+    candidateDate.setDate(baseline.getDate() + offset);
+
+    const slot = getScheduleSlots(candidateDate).find((item) => {
+      if (item.windowEnd.getTime() < baseline.getTime()) {
+        return false;
+      }
+
+      if (item.scheduledAt.getTime() >= baseline.getTime()) {
+        return true;
+      }
+
+      return baseline.getTime() <= item.windowEnd.getTime();
+    });
+
+    if (slot) {
+      return {
+        ...slot,
+        availableAt:
+          slot.scheduledAt.getTime() >= baseline.getTime() ? slot.scheduledAt : new Date(baseline)
+      };
+    }
+  }
+
+  return null;
+}
+
 export function getMinPostGapMs() {
   return MIN_POST_GAP_HOURS * 60 * 60 * 1000;
 }
