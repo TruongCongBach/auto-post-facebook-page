@@ -22,3 +22,4 @@ Danh sách template hiện có:
 - `04-phong-cach-khong-gian.md`
 - `05-trai-nghiem-thuc-te.md`
 - `06-tuong-tac-nhe.md`
+- `07-khuyen-mai-uu-dai.md`
