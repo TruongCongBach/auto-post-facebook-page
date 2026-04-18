@@ -94,7 +94,7 @@ npm start
 Chay bang PM2:
 
 ```bash
-npm run start:pm2
+npm run pm2:start
 ```
 
 Chay 1 lan:
@@ -123,7 +123,7 @@ mkdir -p logs
 Chay worker bang PM2:
 
 ```bash
-npm run start:pm2
+npm run pm2:start
 ```
 
 Mot so lenh van hanh co ban:
@@ -146,7 +146,7 @@ npm run pm2:restart
 Neu may chua tung chay PM2 cho project nay, dung:
 
 ```bash
-npm run start:pm2
+npm run pm2:start
 ```
 
 Luu cau hinh de may reboot van tu chay lai:

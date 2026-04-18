@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "start:pm2": "mkdir -p logs && pm2 start ecosystem.config.cjs",
+    "pm2:start": "mkdir -p logs && pm2 start ecosystem.config.cjs",
     "pm2:status": "pm2 status",
     "pm2:logs": "pm2 logs auto-post-facebook-page",
     "pm2:restart": "pm2 restart auto-post-facebook-page",
