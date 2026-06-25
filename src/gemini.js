@@ -18,7 +18,7 @@ function buildPrompt(product) {
     'Yeu cau chung:',
     '- Ngon ngu: tieng Viet.',
     '- Giong dieu: gan gui, tu nhien, than thien, dang tin.',
-    '- Do dai muc tieu: khoang 300-800 ky tu.',
+    '- Do dai muc tieu: khoang 250-450 ky tu, tuyet doi khong vuot qua 500 ky tu. Uu tien ngan gon, suc tich.',
     '- Khong de cap gia.',
     '- Khong dung van phong quang cao lo lieu.',
     '- Khong lap tu, khong lap cau quen thuoc giua cac bai.',
@@ -49,7 +49,7 @@ function buildPrompt(product) {
     'Luu y them:',
     '- Neu mo ta san pham con chung chung, hay suy luan hop ly de viet tu nhien nhung khong bia thong tin qua cu the.',
     '- Moi bai phai co cam giac khac nhau ve cach mo dau va cach ket cau.',
-    '- Neu thong tin san pham kha day du, hay viet chi tiet hon mot chut thay vi qua ngan.',
+    '- Neu thong tin san pham kha day du, chi chon loc 2-3 y dat gia nhat de viet, khong liet ke dan trai cho dai bai.',
     '- Neu co thong tin ve chat lieu, kich thuoc, cong nang, mau sac, kieu dang thi uu tien dua vao bai viet mot cach tu nhien.',
     '',
     'Thong tin san pham:',
@@ -76,17 +76,12 @@ function extractText(payload) {
 }
 
 export async function generateProductCopy(product) {
-  if (!config.geminiApiKey) {
-    throw new Error('GEMINI_API_KEY is missing');
-  }
-
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${config.geminiModel}:generateContent`,
+    `${config.geminiBaseUrl}/v1beta/models/${config.geminiModel}:generateContent`,
     {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': config.geminiApiKey
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         contents: [
